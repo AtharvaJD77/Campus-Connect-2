@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import api from '../utils/api';
-import { X, Calendar, Clock, MapPin, Link, Users } from 'lucide-react';
+import { X, Calendar, Clock, MapPin, Link, Users, Upload } from 'lucide-react';
 
 const CreateEventModal = ({ onClose, onEventCreated, clubs }) => {
   const [form, setForm] = useState({
@@ -15,7 +15,30 @@ const CreateEventModal = ({ onClose, onEventCreated, clubs }) => {
     clubId: clubs?.[0]?._id || '',
   });
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+
+  const handlePosterUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('media', file);
+      const res = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setForm(prev => ({ ...prev, poster: res.data }));
+    } catch (err) {
+      setError(err.response?.data || 'Failed to upload poster.');
+    } finally {
+      setUploading(false);
+      e.target.value = null; // reset input
+    }
+  };
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -169,17 +192,24 @@ const CreateEventModal = ({ onClose, onEventCreated, clubs }) => {
           {/* Poster URL & Participant Limit Row */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                <Link className="inline h-3.5 w-3.5 mr-1" />Poster URL
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1 flex items-center">
+                <Link className="inline h-3.5 w-3.5 mr-1" />Poster URL or Upload
               </label>
-              <input
-                type="url"
-                name="poster"
-                value={form.poster}
-                onChange={handleChange}
-                placeholder="https://..."
-                className="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 dark:text-white"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  name="poster"
+                  value={form.poster}
+                  onChange={handleChange}
+                  placeholder="https://..."
+                  className="w-full flex-1 border border-gray-300 dark:border-slate-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 dark:text-white"
+                />
+                <label className={`cursor-pointer bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center shadow-sm whitespace-nowrap border border-blue-200 dark:border-blue-800 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  <Upload className="h-4 w-4 mr-1.5" />
+                  {uploading ? '...' : 'Upload'}
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploading} />
+                </label>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">

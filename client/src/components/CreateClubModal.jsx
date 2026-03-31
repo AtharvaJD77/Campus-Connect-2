@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import api from '../utils/api';
-import { X, Building, Mail } from 'lucide-react';
+import { X, Building, Mail, Upload } from 'lucide-react';
 
 const CreateClubModal = ({ onClose, onClubCreated }) => {
   const [form, setForm] = useState({
@@ -11,7 +11,30 @@ const CreateClubModal = ({ onClose, onClubCreated }) => {
     logo: '',
   });
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('media', file);
+      const res = await api.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setForm(prev => ({ ...prev, logo: res.data }));
+    } catch (err) {
+      setError(err.response?.data || 'Failed to upload logo.');
+    } finally {
+      setUploading(false);
+      e.target.value = null; // reset input
+    }
+  };
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -106,15 +129,22 @@ const CreateClubModal = ({ onClose, onClubCreated }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Logo URL <span className="text-gray-400 font-normal">(optional)</span></label>
-            <input
-              type="url"
-              name="logo"
-              value={form.logo}
-              onChange={handleChange}
-              placeholder="https://..."
-              className="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 dark:text-white"
-            />
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Logo URL or Upload <span className="text-gray-400 font-normal">(optional)</span></label>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                name="logo"
+                value={form.logo}
+                onChange={handleChange}
+                placeholder="https://..."
+                className="w-full flex-1 border border-gray-300 dark:border-slate-600 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-700 dark:text-white"
+              />
+              <label className={`cursor-pointer bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center shadow-sm whitespace-nowrap border border-blue-200 dark:border-blue-800 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <Upload className="h-4 w-4 mr-2" />
+                {uploading ? '...' : 'Upload'}
+                <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={uploading} />
+              </label>
+            </div>
           </div>
 
           <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800 rounded-lg p-3 text-xs text-amber-700 dark:text-amber-400">
