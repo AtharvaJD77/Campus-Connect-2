@@ -1,6 +1,7 @@
 import Event from '../models/Event.js';
 import Club from '../models/Club.js';
 import Registration from '../models/Registration.js';
+import { sendEmail } from '../utils/sendEmail.js';
 
 
 // ✅ Create Event (ClubAdmin/SystemAdmin)
@@ -14,7 +15,11 @@ export const createEvent = async (req, res) => {
       venue,
       poster,
       registrationLink,
+      externalLink,
+      isPaid,
+      registrationFee,
       participantLimit,
+      short_videos,
       clubId
     } = req.body;
 
@@ -41,7 +46,11 @@ export const createEvent = async (req, res) => {
       venue,
       poster,
       registrationLink,
+      externalLink,
+      isPaid,
+      registrationFee,
       participantLimit,
+      short_videos: short_videos || [],
       club: clubId,
       status: club.isVerified ? 'approved' : 'pending' // 🔥 Auto-approve if club is verified
     });
@@ -167,10 +176,71 @@ export const updateEvent = async (req, res) => {
     event.time = req.body.time || event.time;
     event.venue = req.body.venue || event.venue;
     event.poster = req.body.poster || event.poster;
-    event.registrationLink = req.body.registrationLink || event.registrationLink;
-    event.participantLimit = req.body.participantLimit || event.participantLimit;
+    event.registrationLink = req.body.registrationLink !== undefined ? req.body.registrationLink : event.registrationLink;
+    event.externalLink = req.body.externalLink !== undefined ? req.body.externalLink : event.externalLink;
+    event.isPaid = req.body.isPaid !== undefined ? req.body.isPaid : event.isPaid;
+    event.registrationFee = req.body.registrationFee !== undefined ? req.body.registrationFee : event.registrationFee;
+    event.participantLimit = req.body.participantLimit !== undefined ? req.body.participantLimit : event.participantLimit;
+    event.short_videos = req.body.short_videos !== undefined ? req.body.short_videos : event.short_videos;
 
     const updatedEvent = await event.save();
+
+    // Background Notification Workflow
+    (async () => {
+      try {
+        const registrations = await Registration.find({ event: updatedEvent._id });
+        const emails = new Set();
+        
+        registrations.forEach(reg => {
+          if (reg.email) emails.add(reg.email);
+          if (reg.registrationType === 'Group' && reg.teamMembers) {
+            reg.teamMembers.forEach(member => {
+              if (member.email) emails.add(member.email);
+            });
+          }
+        });
+
+        const emailList = Array.from(emails);
+        if (emailList.length > 0) {
+          const formattedDate = new Date(updatedEvent.date).toLocaleDateString('en-US', {
+            weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+          });
+
+          const subject = `Update: ${updatedEvent.title} Details Changed`;
+          const html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+              <div style="background-color: #4f46e5; color: white; padding: 20px; text-align: center;">
+                <h2 style="margin: 0; font-size: 24px;">🔔 Event Update Notice</h2>
+              </div>
+              <div style="padding: 20px;">
+                <p>Hello,</p>
+                <p>The organizers of <strong>${updatedEvent.title}</strong> have just updated the event details. Please review the updated schedule and venue below to ensure you have the correct information.</p>
+                
+                <div style="background-color: #f3f4f6; border-left: 4px solid #4f46e5; padding: 15px; margin: 20px 0;">
+                  <h3 style="margin-top: 0; color: #111827;">Updated Event Details</h3>
+                  <ul style="list-style-type: none; padding: 0; margin: 0;">
+                    <li style="margin-bottom: 8px;">📅 <strong>Date:</strong> ${formattedDate}</li>
+                    <li style="margin-bottom: 8px;">⏰ <strong>Time:</strong> ${updatedEvent.time}</li>
+                    <li style="margin-bottom: 8px;">📍 <strong>Venue:</strong> ${updatedEvent.venue}</li>
+                  </ul>
+                </div>
+                
+                <p>If you have any questions, please contact the club administrators. Visit your Campus Connect dashboard to see full details!</p>
+                <br />
+                <p>Best regards,<br><strong>Campus Connect Team</strong></p>
+              </div>
+            </div>
+          `;
+
+          // Dispatch emails concurrently
+          await Promise.all(emailList.map(email => 
+            sendEmail({ to: email, subject, html }).catch(err => console.error('Failed sending update to', email, err))
+          ));
+        }
+      } catch (err) {
+        console.error('Error in Event Update Email Broadcasting:', err);
+      }
+    })();
 
     res.json(updatedEvent);
 
@@ -226,6 +296,40 @@ export const approveEvent = async (req, res) => {
     await event.save();
 
     res.json({ message: 'Event approved', event });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✅ Toggle Like on Event
+export const toggleLike = async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    const userId = req.user._id;
+    const alreadyLiked = event.liked_by.includes(userId);
+
+    if (alreadyLiked) {
+      // Unlike
+      event.liked_by = event.liked_by.filter(id => id.toString() !== userId.toString());
+      event.likes_count = Math.max(0, event.likes_count - 1);
+    } else {
+      // Like
+      event.liked_by.push(userId);
+      event.likes_count = event.likes_count + 1;
+    }
+
+    await event.save();
+
+    res.json({
+      likes_count: event.likes_count,
+      liked: !alreadyLiked,
+    });
 
   } catch (error) {
     res.status(500).json({ message: error.message });

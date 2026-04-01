@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Calendar, MapPin, Clock, Code2 } from 'lucide-react';
 
-const EventCard = ({ event, onViewRegistrations, onViewFeedback }) => {
+const EventCard = ({ event, onViewRegistrations, onViewFeedback, onEditEvent }) => {
   const formattedDate = new Date(event.date).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric'
   });
@@ -72,6 +72,14 @@ const EventCard = ({ event, onViewRegistrations, onViewFeedback }) => {
                     className="text-[10px] font-bold text-amber-600 hover:text-white hover:bg-amber-600 px-2 py-1 rounded transition-colors"
                   >
                     Feedback
+                  </button>
+                )}
+                {onEditEvent && (
+                  <button 
+                    onClick={() => onEditEvent(event)} 
+                    className="text-[10px] font-bold text-indigo-600 hover:text-white hover:bg-indigo-600 px-2 py-1 rounded transition-colors"
+                  >
+                    Edit
                   </button>
                 )}
               </div>

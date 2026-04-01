@@ -8,6 +8,7 @@ export const registerForEvent = async (req, res) => {
   try {
     const eventId = req.params.id;
     const studentId = req.user._id;
+    const { registrationType, teamName, teamMembers, fullName, email, phoneNumber, rollNumber, department, yearOfStudy, paymentProof } = req.body;
 
     const event = await Event.findById(eventId);
     if (!event) {
@@ -15,9 +16,14 @@ export const registerForEvent = async (req, res) => {
     }
 
     // Check participant limit
-    const registrationCount = await Registration.countDocuments({ event: eventId, status: 'registered' });
+    const registrationCount = await Registration.countDocuments({ event: eventId, status: { $ne: 'cancelled' } });
     if (event.participantLimit && registrationCount >= event.participantLimit) {
       return res.status(400).json({ message: 'Registration full' });
+    }
+
+    // Check payment proof for paid events
+    if (event.isPaid && !paymentProof) {
+      return res.status(400).json({ message: 'Payment proof is required for paid events' });
     }
 
     // Check if already registered
@@ -34,6 +40,16 @@ export const registerForEvent = async (req, res) => {
     await Registration.create({
       student: studentId,
       event: eventId,
+      registrationType,
+      teamName,
+      teamMembers: registrationType === 'Group' ? teamMembers : [],
+      fullName,
+      email,
+      phoneNumber,
+      rollNumber,
+      department,
+      yearOfStudy,
+      paymentProof
     });
 
     // Send Confirmation Email
@@ -95,14 +111,33 @@ export const cancelRegistration = async (req, res) => {
   }
 };
 
-// Get a student's registered events
+// Get a student's registered events (Excluding explicitly rejected/cancelled)
 export const getMyRegistrations = async (req, res) => {
   try {
-    const registrations = await Registration.find({ student: req.user._id, status: 'registered' }).populate({
+    const registrations = await Registration.find({ 
+      student: req.user._id, 
+      status: { $in: ['registered', 'Pending', 'Approved', 'attended'] } 
+    }).populate({
       path: 'event',
       populate: { path: 'club', select: 'name logo' }
     });
     res.json(registrations.map(r => r.event));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get a student's registration status for a specific event
+export const getMyRegistrationStatus = async (req, res) => {
+  try {
+    const registration = await Registration.findOne({
+      student: req.user._id,
+      event: req.params.id
+    });
+    if (!registration) {
+      return res.status(404).json({ message: 'Not registered for this event' });
+    }
+    res.json({ status: registration.status });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -124,8 +159,62 @@ export const getEventRegistrations = async (req, res) => {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
-    const registrations = await Registration.find({ event: eventId, status: 'registered' }).populate('student', 'name email');
-    res.json(registrations.map(r => r.student));
+    const registrations = await Registration.find({ 
+      event: eventId, 
+      status: { $in: ['registered', 'Pending', 'Approved', 'Rejected', 'attended'] } 
+    }).populate('student', 'name email');
+    
+    res.json(registrations.map(r => {
+      const studentData = r.student ? r.student.toObject() : { name: 'Unknown', email: 'N/A' };
+      return {
+        ...studentData,
+        _id: r._id, // Send the registration ID itself out for updates
+        registrationDetails: {
+          registrationType: r.registrationType,
+          teamName: r.teamName,
+          teamMembers: r.teamMembers,
+          fullName: r.fullName,
+          email: r.email,
+          phoneNumber: r.phoneNumber,
+          rollNumber: r.rollNumber,
+          department: r.department,
+          yearOfStudy: r.yearOfStudy,
+          paymentProof: r.paymentProof,
+          status: r.status,
+          registeredAt: r.createdAt
+        }
+      };
+    }));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Update Registration Status (Approve/Reject)
+export const updateRegistrationStatus = async (req, res) => {
+  try {
+    const registrationId = req.params.id;
+    const { status } = req.body; 
+
+    if (!['Pending', 'Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    const registration = await Registration.findById(registrationId).populate('event');
+    if (!registration) return res.status(404).json({ message: 'Registration not found' });
+    
+    // Auth Check
+    const club = await Club.findById(registration.event.club);
+    if (!club) return res.status(404).json({ message: 'Club not found' });
+
+    if (club.createdBy.toString() !== req.user._id.toString() && !['SystemAdmin', 'Admin'].includes(req.user.role)) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    registration.status = status;
+    await registration.save();
+    
+    res.json({ message: `Registration ${status}`, registration });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

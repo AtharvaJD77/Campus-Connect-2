@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { X, Users, Mail, User } from 'lucide-react';
+import { X, Users, Mail, User, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
 import api from '../utils/api';
 
 const EventRegistrationsModal = ({ event, onClose }) => {
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
 
   useEffect(() => {
     const fetchRegistrations = async () => {
@@ -21,6 +22,46 @@ const EventRegistrationsModal = ({ event, onClose }) => {
 
     fetchRegistrations();
   }, [event._id]);
+
+  const handleStatusUpdate = async (registrationId, newStatus) => {
+    setUpdatingId(registrationId);
+    try {
+      await api.put(`/registrations/${registrationId}/status`, { status: newStatus });
+      // Update local state
+      setRegistrations(prev => prev.map(r => 
+        r._id === registrationId 
+          ? { ...r, registrationDetails: { ...r.registrationDetails, status: newStatus } }
+          : r
+      ));
+    } catch (err) {
+      console.error('Failed to update status:', err);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'Approved':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+            <CheckCircle className="h-3 w-3" /> Approved
+          </span>
+        );
+      case 'Rejected':
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded-full">
+            <XCircle className="h-3 w-3" /> Rejected
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
+            <Clock className="h-3 w-3" /> Pending
+          </span>
+        );
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -66,22 +107,113 @@ const EventRegistrationsModal = ({ event, onClose }) => {
                 </span>
               </div>
               
-              {registrations.map((student, idx) => (
-                <div key={student._id || idx} className="flex items-center p-3 sm:p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl hover:border-primary-200 dark:hover:border-primary-800 hover:shadow-sm transition-all group">
-                  <div className="h-10 w-10 bg-gradient-to-br from-primary-100 to-indigo-100 rounded-full flex items-center justify-center text-primary-600 font-bold shadow-inner mr-4 flex-shrink-0">
-                    {student.name ? student.name.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
+              {registrations.map((student, idx) => {
+                const displayName = student.registrationDetails?.fullName || student.name || 'Unknown Student';
+                const displayEmail = student.registrationDetails?.email || student.email;
+                const regType = student.registrationDetails?.registrationType || 'Individual';
+                const regStatus = student.registrationDetails?.status || 'Pending';
+                const isUpdating = updatingId === student._id;
+
+                return (
+                <div key={student._id || idx} className="flex flex-col p-3 sm:p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl hover:border-primary-200 dark:hover:border-primary-800 hover:shadow-sm transition-all group relative overflow-hidden">
+                  {regType === 'Group' && (
+                    <div className="absolute top-0 right-0 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold px-2 py-0.5 rounded-bl-lg uppercase tracking-wider">
+                      Group
+                    </div>
+                  )}
+                  <div className="flex items-center pt-1">
+                    <div className="h-10 w-10 bg-gradient-to-br from-primary-100 to-indigo-100 rounded-full flex items-center justify-center text-primary-600 font-bold shadow-inner mr-4 flex-shrink-0">
+                      {displayName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900 dark:text-white truncate">
+                          {displayName}
+                        </p>
+                        {getStatusBadge(regStatus)}
+                      </div>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 truncate flex items-center mt-0.5">
+                        <Mail className="h-3.5 w-3.5 mr-1.5 opacity-70" />
+                        {displayEmail}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-slate-900 dark:text-white truncate">
-                      {student.name || 'Unknown Student'}
-                    </p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 truncate flex items-center mt-0.5">
-                      <Mail className="h-3.5 w-3.5 mr-1.5 opacity-70" />
-                      {student.email}
-                    </p>
+
+                  {/* Approve/Reject Buttons */}
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex gap-2">
+                    <button
+                      onClick={() => handleStatusUpdate(student._id, 'Approved')}
+                      disabled={isUpdating || regStatus === 'Approved'}
+                      className={`flex-1 flex items-center justify-center gap-1 text-xs font-bold py-2 rounded-lg transition-all ${
+                        regStatus === 'Approved'
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 cursor-default'
+                          : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40 border border-green-200 dark:border-green-800'
+                      } disabled:opacity-50`}
+                    >
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      {regStatus === 'Approved' ? 'Approved' : 'Approve'}
+                    </button>
+                    <button
+                      onClick={() => handleStatusUpdate(student._id, 'Rejected')}
+                      disabled={isUpdating || regStatus === 'Rejected'}
+                      className={`flex-1 flex items-center justify-center gap-1 text-xs font-bold py-2 rounded-lg transition-all ${
+                        regStatus === 'Rejected'
+                          ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 cursor-default'
+                          : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800'
+                      } disabled:opacity-50`}
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      {regStatus === 'Rejected' ? 'Rejected' : 'Reject'}
+                    </button>
                   </div>
+
+                  {student.registrationDetails && regType === 'Individual' && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 grid grid-cols-2 gap-2 text-xs">
+                      <div className="text-slate-500 dark:text-slate-400"><span className="font-semibold text-slate-700 dark:text-slate-300">Roll No:</span> {student.registrationDetails.rollNumber}</div>
+                      <div className="text-slate-500 dark:text-slate-400"><span className="font-semibold text-slate-700 dark:text-slate-300">Phone:</span> {student.registrationDetails.phoneNumber}</div>
+                      <div className="text-slate-500 dark:text-slate-400"><span className="font-semibold text-slate-700 dark:text-slate-300">Dept:</span> {student.registrationDetails.department}</div>
+                      <div className="text-slate-500 dark:text-slate-400"><span className="font-semibold text-slate-700 dark:text-slate-300">Year:</span> {student.registrationDetails.yearOfStudy}</div>
+                    </div>
+                  )}
+                  {student.registrationDetails && regType === 'Group' && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 text-xs">
+                      <div className="mb-2 text-slate-500 dark:text-slate-400">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Team Name:</span> {student.registrationDetails.teamName}
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-400 mb-1 font-semibold text-slate-700 dark:text-slate-300">
+                        Team Members ({student.registrationDetails.teamMembers?.length || 0}):
+                      </div>
+                      {student.registrationDetails.teamMembers?.length > 0 ? (
+                        <div className="space-y-2 mt-2">
+                          {student.registrationDetails.teamMembers.map((member, i) => (
+                            <div key={i} className="bg-slate-50 dark:bg-slate-700/50 p-2 rounded relative">
+                              <p className="font-medium text-slate-800 dark:text-slate-200">{member.fullName}</p>
+                              <div className="flex gap-4 mt-0.5 opacity-80">
+                                <span className="flex items-center"><Mail className="h-3 w-3 mr-1" />{member.email}</span>
+                                <span className="flex items-center"><User className="h-3 w-3 mr-1" />{member.rollNumber}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 italic">No additional members.</p>
+                      )}
+                    </div>
+                  )}
+                  {student.registrationDetails?.paymentProof && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                      <a 
+                        href={student.registrationDetails.paymentProof} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors border border-green-200 dark:border-green-800"
+                      >
+                        <FileText className="h-3.5 w-3.5" /> View Payment Proof
+                      </a>
+                    </div>
+                  )}
                 </div>
-              ))}
+              );})}
             </div>
           )}
         </div>

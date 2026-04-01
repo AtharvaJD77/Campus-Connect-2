@@ -10,6 +10,7 @@ import followerRoutes from './routes/followerRoutes.js';
 import registrationRoutes from './routes/registrationRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import feedbackRoutes from './routes/feedbackRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -33,6 +34,7 @@ app.use('/api/followers', followerRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Basic Route
 app.get('/', (req, res) => {

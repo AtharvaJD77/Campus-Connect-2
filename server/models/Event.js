@@ -28,6 +28,17 @@ const eventSchema = new mongoose.Schema({
   registrationLink: {
     type: String,
   },
+  externalLink: {
+    type: String,
+  },
+  isPaid: {
+    type: Boolean,
+    default: false,
+  },
+  registrationFee: {
+    type: Number,
+    default: 0,
+  },
   participantLimit: {
     type: Number,
   },
@@ -36,11 +47,22 @@ const eventSchema = new mongoose.Schema({
     ref: 'Club',
     required: true,
   },
+  short_videos: [{
+    type: String, // Array of URLs
+  }],
   status: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],
     default: 'pending'
   },
+  likes_count: {
+    type: Number,
+    default: 0,
+  },
+  liked_by: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  }],
 }, { timestamps: true });
 
 export default mongoose.model('Event', eventSchema);

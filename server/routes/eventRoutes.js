@@ -6,7 +6,8 @@ import {
   updateEvent,
   deleteEvent,
   approveEvent,
-  getClubEvents
+  getClubEvents,
+  toggleLike
 } from '../controllers/eventController.js';
 
 import { protect, clubAdminOrAdmin } from '../middleware/authMiddleware.js';
@@ -27,5 +28,6 @@ router.route('/:id')
 
 // ✅ ADD HERE (separate route)
 router.put('/:id/approve', protect, approveEvent);
+router.put('/:id/like', protect, toggleLike);
 
 export default router;

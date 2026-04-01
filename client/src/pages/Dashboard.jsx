@@ -6,6 +6,7 @@ import ClubCard from '../components/ClubCard';
 import CreateEventModal from '../components/CreateEventModal';
 import CreateClubModal from '../components/CreateClubModal';
 import EditClubModal from '../components/EditClubModal';
+import EditEventModal from '../components/EditEventModal';
 import ManageMediaModal from '../components/ManageMediaModal';
 import EventRegistrationsModal from '../components/EventRegistrationsModal';
 import ViewFeedbackModal from '../components/ViewFeedbackModal';
@@ -21,6 +22,7 @@ const Dashboard = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showClubModal, setShowClubModal] = useState(false);
   const [editingClub, setEditingClub] = useState(null);
+  const [editingEvent, setEditingEvent] = useState(null);
   const [managingMediaClub, setManagingMediaClub] = useState(null);
   const [viewingEventRegistrations, setViewingEventRegistrations] = useState(null);
   const [viewingFeedback, setViewingFeedback] = useState(null);
@@ -67,6 +69,10 @@ const Dashboard = () => {
   // Prepend newly created event to the list immediately
   const handleEventCreated = (newEvent) => {
     setEvents(prev => [newEvent, ...prev]);
+  };
+
+  const handleEventUpdated = (updatedEvent) => {
+    setEvents(prev => prev.map(e => e._id === updatedEvent._id ? updatedEvent : e));
   };
 
   // Add newly created club to myClubs
@@ -169,6 +175,7 @@ const Dashboard = () => {
                 event={event} 
                 onViewRegistrations={user.role === 'ClubAdmin' ? setViewingEventRegistrations : undefined} 
                 onViewFeedback={user.role === 'ClubAdmin' ? setViewingFeedback : undefined}
+                onEditEvent={user.role === 'ClubAdmin' ? setEditingEvent : undefined}
               />
             ))
           }
@@ -230,6 +237,15 @@ const Dashboard = () => {
           club={editingClub}
           onClose={() => setEditingClub(null)}
           onClubUpdated={handleClubUpdated}
+        />
+      )}
+
+      {/* Edit Event Modal */}
+      {editingEvent && (
+        <EditEventModal
+          event={editingEvent}
+          onClose={() => setEditingEvent(null)}
+          onEventUpdated={handleEventUpdated}
         />
       )}
 
